@@ -1,0 +1,6 @@
+classes=36
+train=/opt/data/private/DataSet3/data_aug_yolo/train.txt
+valid=/opt/data/private/DataSet3/data_aug_yolo/val.txt
+names=data/lp.names
+backup=backup/
+eval=coco

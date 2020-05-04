@@ -1,0 +1,6 @@
+classes=1
+train=/opt/data/private/yolov3/data/vehicle_dataset/train.txt
+valid=/opt/data/private/yolov3/data/vehicle_dataset/val.txt
+names=data/vehicle.names
+backup=backup/
+eval=coco
