@@ -88,7 +88,7 @@ def main():
 
     
     print('DFL-CNN <==> Part2 : Load Network  <==> Begin')
-    model = DFL_VGG16(k = 10, nclass = 175)     
+    model = DFL_VGG16(k = 10, nclass=176)
     if args.gpu is not None:
         model = nn.DataParallel(model, device_ids=range(args.gpu))
         model = model.cuda()
