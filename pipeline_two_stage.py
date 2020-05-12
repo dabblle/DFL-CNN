@@ -54,7 +54,7 @@ def init():
     model = nn.DataParallel(model, device_ids=range(0, 1))
     model = model.cuda()
     model.load_state_dict(checkpoint['state_dict'])
-    return model,index2classlist
+    return model, index2classlist
 
 def fine_grained(image):
     img_tensor = get_transform()(process_data(image))
@@ -139,7 +139,8 @@ def detect(save_img=False):
 
                         pil_image = Image.fromarray(cv2.cvtColor(car_image, cv2.COLOR_BGR2RGB))
                         _, clsname = fine_grained(pil_image)
-                        color_image = process_image(pil_image)
+                        #color_image = process_image(pil_image)
+                        color_image = get_color(car_image)
                         label = '%s,color:%s' % (clsname, color_image)
                         plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
                 cv2.imwrite(save_exist_vehicle_img_path, im0)
