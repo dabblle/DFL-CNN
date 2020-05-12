@@ -23,5 +23,5 @@ def process_data(image, target_size=(448, 448)):
     resize_image = image.resize((nw, nh), Image.BICUBIC)
     image_paste = Image.new('RGB', target_size, (128, 128, 128))
     image_paste.paste(resize_image, ((w - nw) // 2, (h - nh) // 2))
-    image_paste.save('save.jpg')
+    # image_paste.save('save.jpg')
     return image_paste
