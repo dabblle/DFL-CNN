@@ -50,7 +50,7 @@ def init():
     with open('/opt/data/private/DATASETS/CarsDatasets/classnames.name','r') as f:
         index2classlist = f.read().split('\n')
     checkpoint = torch.load('weight/model_best.pth.tar')
-    model = DFL_VGG16(k=10, nclass=175)
+    model = DFL_VGG16(k=10, nclass=176)
     model = nn.DataParallel(model, device_ids=range(0, 1))
     model = model.cuda()
     model.load_state_dict(checkpoint['state_dict'])
@@ -136,11 +136,11 @@ def detect(save_img=False):
                         if (x2 - x1) * (y2 - y1) < (h * w * 0.1):
                             continue
                         car_image = im0[int(xyxy[1]):int(xyxy[3]), int(xyxy[0]):int(xyxy[2])]
-
+                        h, w, _ = car_image.shape
                         pil_image = Image.fromarray(cv2.cvtColor(car_image, cv2.COLOR_BGR2RGB))
                         _, clsname = fine_grained(pil_image)
                         #color_image = process_image(pil_image)
-                        color_image = get_color(car_image)
+                        color_image = get_color(car_image[int(h*0.15):h-int(h*0.15), int(w*0.1):w-int(w*0.1)])
                         label = '%s,color:%s' % (clsname, color_image)
                         plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
                 cv2.imwrite(save_exist_vehicle_img_path, im0)
