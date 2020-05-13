@@ -17,7 +17,6 @@ def process_data(image, target_size=(448, 448)):
     iw, ih = new_img.size
     w, h = target_size
     rate = min(w / iw, h / ih)
-
     nw = int(iw * rate)
     nh = int(ih * rate)
     resize_image = image.resize((nw, nh), Image.BICUBIC)
