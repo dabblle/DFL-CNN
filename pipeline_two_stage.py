@@ -25,12 +25,14 @@ from utils.MyImageFolderWithPaths import *
 from drawrect import *
 from process_data import process_data
 from yolov3.colorDetector import *
-##yolo
+# yolo
 import argparse
 from sys import platform
 from yolov3.models import *  # set ONNX_EXPORT in models.py
 from yolov3.utils.datasets import *
 from yolov3.utils.utils import *
+vehicle_id = [2, 3, 5, 7]
+
 
 def get_transform():
     transform_list = []
@@ -39,36 +41,14 @@ def get_transform():
 
     # transform_list.append(transforms.RandomHorizontalFlip(p=0.3))
 
-    transform_list.append(transforms.CenterCrop((448, 448)))
+    # transform_list.append(transforms.CenterCrop((448, 448)))
 
     transform_list.append(transforms.ToTensor())
 
     transform_list.append(transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
 
     return transforms.Compose(transform_list)
-def init():
-    with open('/opt/data/private/DATASETS/CarsDatasets/classnames.name','r') as f:
-        index2classlist = f.read().split('\n')
-    checkpoint = torch.load('weight/model_best.pth.tar')
-    model = DFL_VGG16(k=10, nclass=176)
-    model = nn.DataParallel(model, device_ids=range(0, 1))
-    model = model.cuda()
-    model.load_state_dict(checkpoint['state_dict'])
-    return model, index2classlist
 
-def fine_grained(image):
-    img_tensor = get_transform()(process_data(image))
-    img_tensor = img_tensor.unsqueeze(0)
-    model, index2classlist = init()
-    out1, out2, out3, indices = model(img_tensor)
-    out = out1 + out2 + 0.1 * out3
-    value, index = torch.max(out.cpu(), 1)
-    idx = int(index[0])
-    classname = index2classlist[idx]
-    return image, classname
-
-
-vehicle_id = [2, 3, 5, 7]
 
 def detect(save_img=False):
     img_size = (320, 192) if ONNX_EXPORT else opt.img_size  # (320, 192) or (416, 256) or (608, 352) for (height, width)
@@ -82,7 +62,9 @@ def detect(save_img=False):
 
     # Initialize model
     model = Darknet(opt.cfg, img_size)
-
+    fine_grained_model = DFL_VGG16(k=10, nclass=176)
+    with open('/opt/data/private/DATASETS/CarsDatasets/classnames.name', 'r') as f:
+        index2classlist = f.read().split('\n')
     # Load weights
     attempt_download(weights)
     if weights.endswith('.pt'):  # pytorch format
@@ -91,6 +73,11 @@ def detect(save_img=False):
         load_darknet_weights(model, weights)
 
     model.to(device).eval()
+
+    checkpoint = torch.load('weight/model_best.pth.tar')
+    fine_grained_model = nn.DataParallel(fine_grained_model, device_ids=range(0, 1))
+    fine_grained_model.load_state_dict(checkpoint['state_dict'])
+    fine_grained_model.to(device).eval()
 
     dataset = LoadImages(source, img_size=img_size)
 
@@ -101,13 +88,11 @@ def detect(save_img=False):
     # Run inference
     t0 = time.time()
     for path, img, im0s, vid_cap in dataset:
-        t = time.time()
         img = torch.from_numpy(img).to(device)
         if img.ndimension() == 3:
             img = img.unsqueeze(0)
         pred = model(img)[0]
         pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
-
 
         # Process detections
         for i, det in enumerate(pred):  # detections per image
@@ -120,9 +105,6 @@ def detect(save_img=False):
 
                 # Print results
                 for c in det[:, -1].unique():
-                    n = (det[:, -1] == c).sum()  # detections per class
-                    s += '%g %ss, ' % (n, names[int(c)])  # add to string
-
                     # exist car
                     if c in vehicle_id:
                         exist_vehicle = True
@@ -132,18 +114,29 @@ def detect(save_img=False):
                 for *xyxy, conf, cls in det:
                     if exist_vehicle:
                         h, w, _ = im0.shape
-                        (x1, y1), (x2, y2) = (int(xyxy[1]), int(xyxy[0])), (int(xyxy[3]), int(xyxy[2]))
-                        if (x2 - x1) * (y2 - y1) < (h * w * 0.1):
+                        (x1, y1) = (int(xyxy[1]), int(xyxy[0]))
+                        (x2, y2) = (int(xyxy[3]), int(xyxy[2]))
+                        if (x2 - x1)*(y2 - y1)<(h*w*0.1):
                             continue
                         car_image = im0[int(xyxy[1]):int(xyxy[3]), int(xyxy[0]):int(xyxy[2])]
                         h, w, _ = car_image.shape
                         pil_image = Image.fromarray(cv2.cvtColor(car_image, cv2.COLOR_BGR2RGB))
-                        _, clsname = fine_grained(pil_image)
-                        #color_image = process_image(pil_image)
+
+                        img_tensor = get_transform()(process_data(pil_image))
+                        img_tensor = img_tensor.unsqueeze(0)
+                        out1, out2, out3, indices = fine_grained_model(img_tensor)
+                        out_sum = out1 + out2 + out3 * 0.1
+                        value, index = torch.max(out_sum.cpu(), 1)
+                        idx = int(index[0])
+                        cls_name = index2classlist[idx]
+
                         color_image = get_color(car_image[int(h*0.15):h-int(h*0.15), int(w*0.1):w-int(w*0.1)])
-                        label = '%s,color:%s' % (clsname, color_image)
+
+                        label = '%s,color:%s' % (cls_name, color_image)
                         plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
+
                 cv2.imwrite(save_exist_vehicle_img_path, im0)
+
     print('Done. (%.3fs)' % (time.time() - t0))
 
 
