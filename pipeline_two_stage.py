@@ -112,13 +112,22 @@ def detect(save_img=False):
 
                 # Write results
                 for *xyxy, conf, cls in det:
-                    if exist_vehicle:
+                    if exist_vehicle and names[int(cls)] in vehicle_id:  # 必须是一辆车，才做后面的处理
                         h, w, _ = im0.shape
                         (x1, y1) = (int(xyxy[1]), int(xyxy[0]))
                         (x2, y2) = (int(xyxy[3]), int(xyxy[2]))
                         if (x2 - x1)*(y2 - y1)<(h*w*0.1):
                             continue
-                        car_image = im0[int(xyxy[1]):int(xyxy[3]), int(xyxy[0]):int(xyxy[2])]
+                        if int(xyxy[1]-10) > 0:
+                            x1 = int(xyxy[1] - 10)
+                        if int(xyxy[3]+10) < w:
+                            x2 = int(xyxy[3] + 10)
+                        if int(xyxy[0] - 10) > 0:
+                            y1 = int(xyxy[0] - 10)
+                        if int(xyxy[2] + 10) < h:
+                            y2 = int(xyxy[2] + 10)
+
+                        car_image = im0[x1:x2, y1:y2]
                         h, w, _ = car_image.shape
                         pil_image = Image.fromarray(cv2.cvtColor(car_image, cv2.COLOR_BGR2RGB))
 

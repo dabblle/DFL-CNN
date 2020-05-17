@@ -96,6 +96,23 @@ class LoadImages:  # for inference
             # Read image
             self.count += 1
             img0 = cv2.imread(path)  # BGR
+
+            # 利用exif信息先对图片进行旋转，不然检测不到。
+            # pil = Image.fromarray(cv2.cvtColor(img0, cv2.COLOR_BGR2RGB))
+            # if hasattr(pil, '_getexif'):
+            #     dict_exif = pil._getexif()
+            #     if dict_exif == None:
+            #         new_img = pil
+            #     elif dict_exif.get(274) == 3:
+            #         new_img = pil.rotate(180)
+            #     elif dict_exif.get(274) == 6:
+            #         new_img = pil.rotate(-90)
+            #     else:
+            #         new_img = pil
+            # else:
+            #     new_img = pil
+            # img0 = cv2.cvtColor(np.asarray(new_img), cv2.COLOR_RGB2BGR)
+
             assert img0 is not None, 'Image Not Found ' + path
             print('image %g/%g %s: ' % (self.count, self.nF, path))
 
