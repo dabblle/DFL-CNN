@@ -70,7 +70,7 @@ def get_transform_for_test_simple():
     
     transform_list.append(transforms.ToTensor())
     
-    transform_list.append(transforms.Normalize(mean=(0.5,0.5,0.5),std=(0.5,0.5,0.5)))
+    transform_list.append(transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
     
     return transforms.Compose(transform_list)
 
