@@ -3,7 +3,8 @@ import torch.utils.data
 import os
 from drawrect import *
 dataroot = '/opt/data/private/DATASETS/CarsDatasets/'
-traindir = os.path.join(dataroot, 'train')
+dataroot_color = '/opt/data/private/code/color-DFL-CNN/color_dataset/'
+traindir = os.path.join(dataroot_color, 'test')
 def get_transform_for_train():
     transform_list = []
 

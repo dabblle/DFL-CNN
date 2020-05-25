@@ -31,23 +31,17 @@ from sys import platform
 from yolov3.models import *  # set ONNX_EXPORT in models.py
 from yolov3.utils.datasets import *
 from yolov3.utils.utils import *
+from resnet import ResNet18
 vehicle_id = [2, 3, 5, 7]
 
 
-def get_transform():
-    transform_list = []
-
-    transform_list.append(transforms.Lambda(lambda img: scale_keep_ar_min_fixed(img, 448)))
-
-    # transform_list.append(transforms.RandomHorizontalFlip(p=0.3))
-
-    # transform_list.append(transforms.CenterCrop((448, 448)))
-
-    transform_list.append(transforms.ToTensor())
-
-    transform_list.append(transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
-
-    return transforms.Compose(transform_list)
+# def get_transform():
+#     transform_list = []
+#     transform_list.append(transforms.Lambda(lambda img: scale_keep_ar_min_fixed(img, 448)))
+#     transform_list.append(transforms.CenterCrop((448, 448)))
+#     transform_list.append(transforms.ToTensor())
+#     transform_list.append(transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
+#     return transforms.Compose(transform_list)
 
 
 def detect(save_img=False):
@@ -55,7 +49,8 @@ def detect(save_img=False):
     out, source, weights = opt.output, opt.source, opt.weights
 
     # Initialize
-    device = torch_utils.select_device(device='cpu' if ONNX_EXPORT else opt.device)
+    # device = torch_utils.select_device(device='cpu' if ONNX_EXPORT else opt.device)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if os.path.exists(out):
         shutil.rmtree(out)  # delete output folder
     os.makedirs(out)
@@ -63,6 +58,10 @@ def detect(save_img=False):
     # Initialize model
     model = Darknet(opt.cfg, img_size)
     fine_grained_model = DFL_VGG16(k=10, nclass=176)
+    color_model = ResNet18().to(device)
+    # color_model = DFL_VGG16(k=10, nclass=8)
+    # with open('/opt/data/private/code/DFL-CNN/color_name.names', 'r') as f:
+    #     color_index2classlist = f.read().split('\n')
     with open('/opt/data/private/DATASETS/CarsDatasets/classnames.name', 'r') as f:
         index2classlist = f.read().split('\n')
     # Load weights
@@ -79,12 +78,17 @@ def detect(save_img=False):
     fine_grained_model.load_state_dict(checkpoint['state_dict'])
     fine_grained_model.to(device).eval()
 
+    color_checkpoint = torch.load('./model/net_020.pth')
+    # color_model = nn.DataParallel(color_model, device_ids=range(0, 1))
+    color_model.load_state_dict(color_checkpoint)
+    color_model.eval()
+
     dataset = LoadImages(source, img_size=img_size)
 
     # Get names and colors
     names = load_classes(opt.names)
     colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(len(names))]
-
+    color_names = ['black', 'blue', 'cyan', 'gray', 'green', 'red', 'white', 'yellow']
     # Run inference
     t0 = time.time()
     for path, img, im0s, vid_cap in dataset:
@@ -112,36 +116,45 @@ def detect(save_img=False):
 
                 # Write results
                 for *xyxy, conf, cls in det:
-                    if exist_vehicle and names[int(cls)] in vehicle_id:  # 必须是一辆车，才做后面的处理
+                    if exist_vehicle and int(cls) in vehicle_id:  # 必须是一辆车，才做后面的处理
                         h, w, _ = im0.shape
                         (x1, y1) = (int(xyxy[1]), int(xyxy[0]))
                         (x2, y2) = (int(xyxy[3]), int(xyxy[2]))
-                        if (x2 - x1)*(y2 - y1)<(h*w*0.1):
-                            continue
-                        if int(xyxy[1]-10) > 0:
-                            x1 = int(xyxy[1] - 10)
-                        if int(xyxy[3]+10) < w:
-                            x2 = int(xyxy[3] + 10)
-                        if int(xyxy[0] - 10) > 0:
-                            y1 = int(xyxy[0] - 10)
-                        if int(xyxy[2] + 10) < h:
-                            y2 = int(xyxy[2] + 10)
+                        # if int(xyxy[1]-10) > 0:
+                        #     x1 = int(xyxy[1] - 10)
+                        # if int(xyxy[3]+10) < w:
+                        #     x2 = int(xyxy[3] + 10)
+                        # if int(xyxy[0] - 10) > 0:
+                        #     y1 = int(xyxy[0] - 10)
+                        # if int(xyxy[2] + 10) < h:
+                        #     y2 = int(xyxy[2] + 10)
 
                         car_image = im0[x1:x2, y1:y2]
                         h, w, _ = car_image.shape
                         pil_image = Image.fromarray(cv2.cvtColor(car_image, cv2.COLOR_BGR2RGB))
 
-                        img_tensor = get_transform()(process_data(pil_image))
+                        img_tensor = get_transform_for_test_simple()(process_data(pil_image))
                         img_tensor = img_tensor.unsqueeze(0)
                         out1, out2, out3, indices = fine_grained_model(img_tensor)
                         out_sum = out1 + out2 + out3 * 0.1
                         value, index = torch.max(out_sum.cpu(), 1)
                         idx = int(index[0])
                         cls_name = index2classlist[idx]
+                        #################clolr_dect#####################
+                        color_img_tensor = get_transform_for_color()(pil_image)
+                        color_img_tensor = color_img_tensor.cuda()
+                        color_img_tensor = color_img_tensor.unsqueeze(0)
+                        output = color_model(color_img_tensor)
+                        # out_sum = out1 * 10 + out2 * 0.1 + out3
+                        _, index = torch.max(output.cpu(), 1)
 
-                        color_image = get_color(car_image[int(h*0.15):h-int(h*0.15), int(w*0.1):w-int(w*0.1)])
+                        idx = int(index)
+                        # color_cls_name = color_index2classlist[idx]
+                        # print(out_sum, value, index, color_cls_name)
 
-                        label = '%s,color:%s' % (cls_name, color_image)
+                       # color_image = get_color(car_image[int(h*0.15):h-int(h*0.15), int(w*0.1):w-int(w*0.1)])
+                        ####################################################
+                        label = '%s\n color:%s' % (cls_name, color_names[idx])
                         plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
 
                 cv2.imwrite(save_exist_vehicle_img_path, im0)
